@@ -8,6 +8,7 @@ import Projects from "./pages/Projects";
 import MapView from "./pages/MapView";
 import Credits from "./pages/Credits";
 import Verify from "./pages/Verify";
+import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/map" element={<MapView />} />
           <Route path="/credits" element={<Credits />} />
           <Route path="/verify" element={<Verify />} />
+          <Route path="/auth" element={<Auth />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

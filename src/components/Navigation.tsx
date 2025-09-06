@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -17,6 +17,7 @@ import {
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const navItems = [
     { name: "Dashboard", href: "/", icon: BarChart3 },
@@ -66,9 +67,9 @@ const Navigation = () => {
           </div>
 
           <div className="hidden md:flex items-center space-x-4">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => navigate('/auth')}>
               <Settings className="w-4 h-4 mr-2" />
-              Settings
+              Login
             </Button>
             <Button variant="hero" size="sm">
               Connect Wallet
@@ -108,9 +109,9 @@ const Navigation = () => {
               </Link>
             ))}
             <div className="pt-4 space-y-2">
-              <Button variant="outline" size="sm" className="w-full">
+              <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/auth')}>
                 <Settings className="w-4 h-4 mr-2" />
-                Settings
+                Login
               </Button>
               <Button variant="hero" size="sm" className="w-full">
                 Connect Wallet
