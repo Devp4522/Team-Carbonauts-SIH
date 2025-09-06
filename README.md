@@ -1,73 +1,62 @@
-# Welcome to your Lovable project
+# Blue Carbon MRV & Registry
 
-## Project info
+A complete blockchain-based Blue Carbon Monitoring, Reporting & Verification (MRV) system with tokenized carbon credits.
 
-**URL**: https://lovable.dev/projects/1cabe174-442a-4c3b-ac5a-ea211cb7a838
+## 🚀 Quick Start
 
-## How can I edit this code?
+```bash
+# Clone and setup
+git clone <repository-url>
+cd blue-carbon-mrv-registry
 
-There are several ways of editing your application.
+# One-command development environment
+chmod +x scripts/dev.sh
+./scripts/dev.sh
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/1cabe174-442a-4c3b-ac5a-ea211cb7a838) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start frontend
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## 🏗️ Architecture
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+- **Smart Contracts**: Solidity (ERC-20 Carbon Credits + ERC-721 Batch NFTs)
+- **Backend**: Node.js + TypeScript + Express + Prisma + PostgreSQL
+- **Frontend**: React + TypeScript + Tailwind CSS
+- **Blockchain**: Hardhat (local) + Polygon Mumbai (testnet)
+- **Storage**: IPFS for metadata and files
 
-**Use GitHub Codespaces**
+## 📋 Services
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:4000
+- API Docs: http://localhost:4000/api/docs
+- Database: localhost:5432
+- IPFS: http://localhost:5001
+- Hardhat: http://localhost:8545
 
-## What technologies are used for this project?
+## 🧪 Testing
 
-This project is built with:
+```bash
+# Run all tests
+npm run test
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+# Contract tests only
+cd contracts && npx hardhat test
 
-## How can I deploy this project?
+# Backend tests only
+cd backend && npm run test
+```
 
-Simply open [Lovable](https://lovable.dev/projects/1cabe174-442a-4c3b-ac5a-ea211cb7a838) and click on Share -> Publish.
+## 🚀 Deployment
 
-## Can I connect a custom domain to my Lovable project?
+```bash
+# Deploy to Mumbai testnet
+chmod +x scripts/deploy-mumbai.sh
+./scripts/deploy-mumbai.sh
+```
 
-Yes, you can!
+## 📚 Documentation
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+- API Documentation: http://localhost:4000/api/docs
+- Contract ABIs: `backend/src/abis/`
+- Database Schema: `backend/prisma/schema.prisma`

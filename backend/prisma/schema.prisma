@@ -1,0 +1,192 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  walletAddress String    @unique
+  role          UserRole  @default(COMMUNITY)
+  profileCID    String?
+  name          String?
+  email         String?
+  organization  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  ownedProjects Project[] @relation("ProjectOwner")
+  devices       Device[]
+  verifications Measurement[] @relation("VerifierMeasurements")
+
+  @@map("users")
+}
+
+model Project {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  country      String
+  coordinates  Json? // [lat, lng]
+  metadataCID  String?
+  onChainId    Int?     @unique
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  owner   User   @relation("ProjectOwner", fields: [ownerId], references: [id])
+  ownerId String
+
+  plots   Plot[]
+  batches Batch[]
+
+  @@map("projects")
+}
+
+model Plot {
+  id                    String   @id @default(cuid())
+  geojsonCID           String   // IPFS CID for polygon data
+  areaHa               Decimal  @db.Decimal(10, 4) // Hectares
+  plantedSpecies       String[] // Array of species names
+  datePlanted          DateTime
+  baselineCarbonTonnes Decimal  @db.Decimal(10, 2)
+  onChainId            Int?     @unique
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  // Relations
+  project   Project @relation(fields: [projectId], references: [id])
+  projectId String
+
+  measurements Measurement[]
+  batches      Batch[]
+
+  @@map("plots")
+}
+
+model Device {
+  id        String   @id @default(cuid())
+  name      String
+  publicKey String   @unique // For signature verification
+  lastSeen  DateTime?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  owner   User   @relation(fields: [ownerId], references: [id])
+  ownerId String
+
+  measurements Measurement[]
+
+  @@map("devices")
+}
+
+model Measurement {
+  id                String   @id @default(cuid())
+  timestamp         DateTime
+  estimatedTonnes   Decimal  @db.Decimal(10, 4)
+  rawDataCID        String?  // IPFS CID for raw sensor data
+  imagesCID         String[] // Array of IPFS CIDs for images
+  geolocation       Json?    // {lat, lng, altitude, accuracy}
+  signedPayload     String   // Signed data from device
+  verified          Boolean  @default(false)
+  verifierComments  String?
+  verifiedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  plot   Plot   @relation(fields: [plotId], references: [id])
+  plotId String
+
+  device   Device @relation(fields: [deviceId], references: [id])
+  deviceId String
+
+  verifier   User?   @relation("VerifierMeasurements", fields: [verifierId], references: [id])
+  verifierId String?
+
+  batches BatchMeasurement[]
+
+  @@map("measurements")
+}
+
+model Batch {
+  id              String      @id @default(cuid())
+  requestedTonnes Decimal     @db.Decimal(10, 4)
+  issuedTonnes    Decimal?    @db.Decimal(10, 4)
+  status          BatchStatus @default(REQUESTED)
+  metadataCID     String?
+  nftTokenId      Int?        @unique
+  txHash          String?     // Transaction hash for minting
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  project   Project @relation(fields: [projectId], references: [id])
+  projectId String
+
+  plot   Plot   @relation(fields: [plotId], references: [id])
+  plotId String
+
+  measurements BatchMeasurement[]
+
+  @@map("batches")
+}
+
+model BatchMeasurement {
+  id            String @id @default(cuid())
+  batchId       String
+  measurementId String
+
+  batch       Batch       @relation(fields: [batchId], references: [id])
+  measurement Measurement @relation(fields: [measurementId], references: [id])
+
+  @@unique([batchId, measurementId])
+  @@map("batch_measurements")
+}
+
+model TokenTransfer {
+  id          String           @id @default(cuid())
+  from        String
+  to          String
+  amount      Decimal          @db.Decimal(10, 4)
+  type        TransferType
+  txHash      String           @unique
+  blockNumber Int
+  reason      String?          // For retirements
+  timestamp   DateTime
+  createdAt   DateTime         @default(now())
+
+  @@map("token_transfers")
+}
+
+enum UserRole {
+  ADMIN
+  VERIFIER
+  NGO
+  COMMUNITY
+  PROJECT_OWNER
+}
+
+enum BatchStatus {
+  REQUESTED
+  VERIFIED
+  MINTED
+  RETIRED
+}
+
+enum TransferType {
+  MINT
+  TRANSFER
+  RETIRE
+}

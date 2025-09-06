@@ -1,0 +1,171 @@
+name: Blue Carbon CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # Lint and test contracts
+  contracts:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: contracts/package-lock.json
+    
+    - name: Install contract dependencies
+      working-directory: ./contracts
+      run: npm ci
+    
+    - name: Compile contracts
+      working-directory: ./contracts
+      run: npx hardhat compile
+    
+    - name: Run contract tests
+      working-directory: ./contracts
+      run: npx hardhat test
+    
+    - name: Generate coverage report
+      working-directory: ./contracts
+      run: npx hardhat coverage
+
+  # Test backend API
+  backend:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgis/postgis:15-3.3
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_USER: bluecarbon
+          POSTGRES_DB: bluecarbon_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
+    
+    - name: Install backend dependencies
+      working-directory: ./backend
+      run: npm ci
+    
+    - name: Generate Prisma client
+      working-directory: ./backend
+      run: npx prisma generate
+    
+    - name: Run database migrations
+      working-directory: ./backend
+      run: npx prisma migrate deploy
+      env:
+        DATABASE_URL: postgresql://bluecarbon:password@localhost:5432/bluecarbon_test?schema=public
+    
+    - name: Run backend tests
+      working-directory: ./backend
+      run: npm test
+      env:
+        DATABASE_URL: postgresql://bluecarbon:password@localhost:5432/bluecarbon_test?schema=public
+        JWT_SECRET: test-secret
+        NODE_ENV: test
+
+  # Test frontend
+  frontend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Lint frontend
+      run: npm run lint --if-present
+    
+    - name: Build frontend
+      run: npm run build
+    
+    - name: Run frontend tests
+      run: npm run test --if-present
+
+  # Deploy to staging (on main branch)
+  deploy-staging:
+    if: github.ref == 'refs/heads/main'
+    needs: [contracts, backend, frontend]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Deploy contracts to Mumbai
+      working-directory: ./contracts
+      run: |
+        npm ci
+        npx hardhat compile
+        npx hardhat run scripts/deploy.ts --network mumbai
+      env:
+        ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+        DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+    
+    - name: Deploy backend to staging
+      run: |
+        echo "Deploy backend to staging server"
+        # Add your deployment commands here
+      env:
+        DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        JWT_SECRET: ${{ secrets.JWT_SECRET }}
+    
+    - name: Deploy frontend to staging
+      run: |
+        echo "Deploy frontend to staging CDN"
+        # Add your deployment commands here
+
+  # Security scanning
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Slither analysis
+      uses: crytic/slither-action@v0.3.0
+      with:
+        target: contracts/
+        slither-config: contracts/slither.config.json
+        fail-on: high
+    
+    - name: Run npm audit
+      run: |
+        cd contracts && npm audit --audit-level high
+        cd ../backend && npm audit --audit-level high
+        cd ../ && npm audit --audit-level high
