@@ -10,13 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import authBackground from "@/assets/auth-background.jpg";
-import { ChevronLeft, Upload } from "lucide-react";
-import { Link } from "react-router-dom";
-
-const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
+import { ChevronLeft, Upload, Wallet } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ethers } from "ethers";
+import { useToast } from "@/hooks/use-toast";
 
 const orgDetailsSchema = z.object({
   name: z.string().min(1, "Organization name is required"),
@@ -37,17 +34,16 @@ const adminDetailsSchema = z.object({
   adminPhone: z.string().min(1, "Phone number is required"),
 });
 
-type LoginFormData = z.infer<typeof loginSchema>;
 type OrgDetailsFormData = z.infer<typeof orgDetailsSchema>;
 type AdminDetailsFormData = z.infer<typeof adminDetailsSchema>;
 
 export default function Auth() {
   const [currentStep, setCurrentStep] = useState(1);
   const [orgData, setOrgData] = useState<OrgDetailsFormData | null>(null);
-
-  const loginForm = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-  });
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
+  const { toast } = useToast();
+  const navigate = useNavigate();
 
   const orgForm = useForm<OrgDetailsFormData>({
     resolver: zodResolver(orgDetailsSchema),
@@ -57,9 +53,83 @@ export default function Auth() {
     resolver: zodResolver(adminDetailsSchema),
   });
 
-  const onLoginSubmit = (data: LoginFormData) => {
-    console.log("Login data:", data);
-    // Handle login logic
+  const connectWallet = async () => {
+    if (!window.ethereum) {
+      toast({
+        title: "MetaMask not found",
+        description: "Please install MetaMask to continue",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsConnecting(true);
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const accounts = await provider.send("eth_requestAccounts", []);
+      const address = accounts[0];
+      setConnectedWallet(address);
+      
+      toast({
+        title: "Wallet connected",
+        description: `Connected to ${address.slice(0, 6)}...${address.slice(-4)}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Connection failed",
+        description: "Failed to connect wallet",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const signInWithWallet = async () => {
+    if (!connectedWallet) {
+      await connectWallet();
+      return;
+    }
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      
+      const message = `Sign in to Blue Carbon Registry\nTimestamp: ${Date.now()}`;
+      const signature = await signer.signMessage(message);
+
+      const response = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          walletAddress: connectedWallet,
+          signature,
+          message,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('walletAddress', connectedWallet);
+        toast({
+          title: "Success",
+          description: "Signed in successfully",
+        });
+        navigate('/');
+      } else {
+        throw new Error(data.error || 'Login failed');
+      }
+    } catch (error) {
+      toast({
+        title: "Sign in failed",
+        description: error instanceof Error ? error.message : "Failed to sign in",
+        variant: "destructive",
+      });
+    }
   };
 
   const onOrgSubmit = (data: OrgDetailsFormData) => {
@@ -67,9 +137,42 @@ export default function Auth() {
     setCurrentStep(2);
   };
 
-  const onAdminSubmit = (data: AdminDetailsFormData) => {
-    console.log("Complete registration:", { ...orgData, ...data });
-    // Handle registration logic
+  const onAdminSubmit = async (data: AdminDetailsFormData) => {
+    if (!connectedWallet) {
+      toast({
+        title: "Wallet required",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      
+      const registrationData = { ...orgData, ...data, walletAddress: connectedWallet };
+      const message = `Register organization: ${JSON.stringify(registrationData)}\nTimestamp: ${Date.now()}`;
+      const signature = await signer.signMessage(message);
+
+      // Here you would send the registration data to your backend
+      console.log("Complete registration:", {
+        ...registrationData,
+        signature,
+        message,
+      });
+
+      toast({
+        title: "Registration submitted",
+        description: "Your organization registration has been submitted for review",
+      });
+    } catch (error) {
+      toast({
+        title: "Registration failed",
+        description: "Failed to submit registration",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleBack = () => {
@@ -124,48 +227,37 @@ export default function Auth() {
             <TabsContent value="login">
               <Card>
                 <CardHeader>
-                  <CardTitle>Sign In</CardTitle>
-                  <p className="text-sm text-muted-foreground">Welcome Back</p>
+                  <CardTitle>Sign In with Wallet</CardTitle>
+                  <p className="text-sm text-muted-foreground">Connect your Web3 wallet to access the platform</p>
                 </CardHeader>
-                <CardContent>
-                  <Form {...loginForm}>
-                    <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
-                      <FormField
-                        control={loginForm.control}
-                        name="email"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Email</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Enter your email" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={loginForm.control}
-                        name="password"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Password</FormLabel>
-                            <FormControl>
-                              <Input type="password" placeholder="Enter your password" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div className="text-right">
-                        <a href="#" className="text-sm text-primary hover:underline">
-                          Forgot Password?
-                        </a>
+                <CardContent className="space-y-4">
+                  {!connectedWallet ? (
+                    <Button 
+                      onClick={connectWallet} 
+                      disabled={isConnecting}
+                      className="w-full"
+                      size="lg"
+                    >
+                      <Wallet className="h-5 w-5 mr-2" />
+                      {isConnecting ? "Connecting..." : "Connect Wallet"}
+                    </Button>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="p-4 border rounded-lg">
+                        <p className="text-sm text-muted-foreground">Connected Wallet</p>
+                        <p className="font-mono text-sm">
+                          {connectedWallet.slice(0, 6)}...{connectedWallet.slice(-4)}
+                        </p>
                       </div>
-                      <Button type="submit" className="w-full">
+                      <Button onClick={signInWithWallet} className="w-full" size="lg">
                         Sign In
                       </Button>
-                    </form>
-                  </Form>
+                    </div>
+                  )}
+                  
+                  <div className="text-xs text-muted-foreground text-center">
+                    Make sure you have MetaMask or a compatible wallet installed
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -194,6 +286,21 @@ export default function Auth() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  {/* Wallet connection requirement */}
+                  {!connectedWallet && (
+                    <div className="mb-6">
+                      <Button 
+                        onClick={connectWallet} 
+                        disabled={isConnecting}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        <Wallet className="h-4 w-4 mr-2" />
+                        {isConnecting ? "Connecting..." : "Connect Wallet First"}
+                      </Button>
+                    </div>
+                  )}
+
                   {currentStep === 1 && (
                     <Form {...orgForm}>
                       <form onSubmit={orgForm.handleSubmit(onOrgSubmit)} className="space-y-4">
@@ -234,6 +341,7 @@ export default function Auth() {
                           />
                         </div>
 
+                        
                         <FormField
                           control={orgForm.control}
                           name="taxId"
@@ -382,7 +490,7 @@ export default function Auth() {
                         </div>
 
                         <div className="flex justify-end">
-                          <Button type="submit">NEXT</Button>
+                          <Button type="submit" disabled={!connectedWallet}>NEXT</Button>
                         </div>
                       </form>
                     </Form>
@@ -407,12 +515,12 @@ export default function Auth() {
                           />
                           <FormField
                             control={adminForm.control}
-                            name="adminEmail"
+                            name="adminPhone"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Email *</FormLabel>
+                                <FormLabel>Phone Number *</FormLabel>
                                 <FormControl>
-                                  <Input type="email" {...field} />
+                                  <Input {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -422,25 +530,13 @@ export default function Auth() {
 
                         <FormField
                           control={adminForm.control}
-                          name="adminPhone"
+                          name="adminEmail"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Phone Number *</FormLabel>
-                              <div className="flex">
-                                <Select defaultValue="+94">
-                                  <SelectTrigger className="w-20">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="+94">🇱🇰 +94</SelectItem>
-                                    <SelectItem value="+1">🇺🇸 +1</SelectItem>
-                                    <SelectItem value="+44">🇬🇧 +44</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormControl>
-                                  <Input {...field} className="flex-1" />
-                                </FormControl>
-                              </div>
+                              <FormLabel>Email *</FormLabel>
+                              <FormControl>
+                                <Input type="email" {...field} />
+                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -450,7 +546,9 @@ export default function Auth() {
                           <Button type="button" variant="outline" onClick={handleBack}>
                             BACK
                           </Button>
-                          <Button type="submit">SUBMIT</Button>
+                          <Button type="submit" disabled={!connectedWallet}>
+                            SUBMIT REGISTRATION
+                          </Button>
                         </div>
                       </form>
                     </Form>
@@ -459,10 +557,6 @@ export default function Auth() {
               </Card>
             </TabsContent>
           </Tabs>
-
-          <div className="text-center text-sm text-muted-foreground">
-            Language: <span className="font-medium">ENGLISH</span>
-          </div>
         </div>
       </div>
     </div>

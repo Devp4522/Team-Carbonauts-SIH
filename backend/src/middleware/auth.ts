@@ -9,7 +9,6 @@ export interface AuthRequest extends Request {
   user?: {
     id: string;
     walletAddress: string;
-    role: UserRole;
   };
 }
 
@@ -23,27 +22,26 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, walletAddress: true, role: true }
-    });
-
-    if (!user) {
+    
+    // For blockchain auth, we just need the wallet address from the token
+    if (!decoded.walletAddress) {
       return next(createError('Invalid token', 401));
     }
 
-    req.user = user;
+    req.user = {
+      id: decoded.walletAddress,
+      walletAddress: decoded.walletAddress
+    };
     next();
   } catch (error) {
     next(createError('Invalid token', 401));
   }
 };
 
-export const requireRole = (roles: UserRole[]) => {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      return next(createError('Insufficient permissions', 403));
-    }
-    next();
-  };
+// Simple wallet-based authorization (can be extended)
+export const requireWallet = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user?.walletAddress) {
+    return next(createError('Wallet authentication required', 403));
+  }
+  next();
 };
